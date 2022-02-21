@@ -1,0 +1,105 @@
+<infinispan
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="urn:infinispan:config:13.0 https://infinispan.org/schemas/infinispan-config-13.0.xsd
+                            urn:infinispan:server:13.0 https://infinispan.org/schemas/infinispan-server-13.0.xsd"
+      xmlns="urn:infinispan:config:13.0"
+      xmlns:server="urn:infinispan:server:13.0">
+
+   <cache-container name="default" statistics="true">
+      <transport cluster="${infinispan.cluster.name:cluster}" stack="${infinispan.cluster.stack:tcp}" node-name="${infinispan.node.name:}"/>
+      <security>
+         <authorization/>
+      </security>
+
+      <!-- refarences: --> 
+      <!-- https://infinispan.org/docs/stable/titles/configuring/configuring.html#configuring-caches-with-jndi-names_persistence -->
+      <distributed-cache name="hoge">
+        <expiration lifespan="5000" />
+        <encoding media-type="application/x-protostream"/>
+        <persistence passivation="false">
+          <jdbc:string-keyed-jdbc-store xmlns:jdbc="urn:infinispan:config:store:jdbc:13.0">
+            <!-- Specifies the JNDI name of a managed datasource on Infinispan Server. -->
+            <jdbc:data-source jndi-url="jdbc/postgres"/>
+            <jdbc:string-keyed-table drop-on-exit="false" create-on-start="true" prefix="TBL">
+              <jdbc:id-column name="ID" type="VARCHAR(255)"/>
+              <jdbc:data-column name="DATA" type="BYTEA"/>
+              <jdbc:timestamp-column name="TS" type="BIGINT"/>
+              <jdbc:segment-column name="S" type="INT"/>
+            </jdbc:string-keyed-table>
+          </jdbc:string-keyed-jdbc-store>
+        </persistence>
+      </distributed-cache>
+
+
+      <!-- https://infinispan.org/docs/stable/titles/configuring/configuring.html#write-through_persistence -->
+      <distributed-cache name="fuga">
+        <encoding media-type="application/x-protostream"/>
+        <persistence passivation="false">
+         <file-store fetch-state="true">
+           <index path="/opt/infinispan/server/data/fuga-index" />
+           <data path="/opt/infinispan/server/data/fuga-data" />
+         </file-store>
+        </persistence>
+      </distributed-cache>
+
+
+   </cache-container>
+
+   <server xmlns="urn:infinispan:server:13.0">
+      <interfaces>
+         <interface name="public">
+            <inet-address value="${infinispan.bind.address:127.0.0.1}"/>
+         </interface>
+      </interfaces>
+
+      <socket-bindings default-interface="public" port-offset="${infinispan.socket.binding.port-offset:0}">
+         <socket-binding name="default" port="${infinispan.bind.port:11222}"/>
+         <socket-binding name="memcached" port="11221"/>
+      </socket-bindings>
+
+      <security>
+         <credential-stores>
+            <credential-store name="credentials" path="credentials.pfx">
+               <clear-text-credential clear-text="secret"/>
+            </credential-store>
+         </credential-stores>
+         <security-realms>
+            <security-realm name="default">
+               <!-- Uncomment to enable TLS on the realm -->
+               <!-- server-identities>
+                  <ssl>
+                     <keystore path="application.keystore"
+                               password="password" alias="server"
+                               generate-self-signed-certificate-host="localhost"/>
+                  </ssl>
+               </server-identities-->
+               <properties-realm groups-attribute="Roles">
+                  <user-properties path="users.properties"/>
+                  <group-properties path="groups.properties"/>
+               </properties-realm>
+            </security-realm>
+         </security-realms>
+      </security>
+
+      <endpoints socket-binding="default" security-realm="default" />
+      <data-sources>
+         <data-source name="ds"
+                      jndi-name="jdbc/postgres"
+                      statistics="true">
+            <connection-factory driver="org.postgresql.Driver"
+                                url="jdbc:postgresql://postgres:5432/insp"
+                                username="admin"
+                                password="password">
+               <connection-property name="name">value</connection-property>
+            </connection-factory>
+            <connection-pool initial-size="1"
+                             max-size="10"
+                             min-size="3"
+                             background-validation="1000"
+                             idle-removal="1"
+                             blocking-timeout="1000"
+                             leak-detection="10000"/>
+         </data-source>
+      </data-sources>
+   </server>
+</infinispan>
